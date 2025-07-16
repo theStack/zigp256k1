@@ -1,39 +1,23 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
+const std = @import("std");
+const s = @cImport({
+    @cInclude("secp256k1.h");
+});
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    const ctx = s.secp256k1_context_create(s.SECP256K1_CONTEXT_NONE);
+    defer s.secp256k1_context_destroy(ctx);
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    var seckey: [32]u8 = undefined;
+    std.mem.writeInt(u256, &seckey, 1, .big);
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    var pubkey: s.secp256k1_pubkey = undefined;
+    const ret = s.secp256k1_ec_pubkey_create(ctx, &pubkey, &seckey);
+    std.debug.assert(ret == 1);
 
-    try bw.flush(); // Don't forget to flush!
+    var pubkey_bytes: [33]u8 = undefined;
+    var pubkey_len: usize = 33;
+    const ret2 = s.secp256k1_ec_pubkey_serialize(ctx, &pubkey_bytes, &pubkey_len, &pubkey, s.SECP256K1_EC_COMPRESSED);
+    std.debug.assert(ret2 == 1 and pubkey_len == 33);
+    const pubkey_hex = std.fmt.bytesToHex(&pubkey_bytes, .lower);
+    std.debug.print("pubkey of seckey 1: {s}\n", .{pubkey_hex});
 }
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
-    };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
-
-const std = @import("std");
