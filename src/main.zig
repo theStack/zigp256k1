@@ -1,23 +1,99 @@
 const std = @import("std");
+const Sha256 = std.crypto.hash.sha2.Sha256;
 const s = @cImport({
     @cInclude("secp256k1.h");
+    @cInclude("secp256k1_extrakeys.h");
+    @cInclude("secp256k1_silentpayments.h");
 });
+
+fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
+    var pubkey_ser: [33]u8 = undefined;
+    var pubkey_len: usize = 33;
+    const ret = s.secp256k1_ec_pubkey_serialize(ctx, &pubkey_ser, &pubkey_len, pubkey, s.SECP256K1_EC_COMPRESSED);
+    std.debug.assert(ret == 1 and pubkey_len == 33);
+    return pubkey_ser;
+}
+
+fn xonlyPubkeySerialize(ctx: ?*const s.secp256k1_context, xonly_pubkey: *const s.secp256k1_xonly_pubkey) [32]u8 {
+    var xonly_pubkey_ser: [32]u8 = undefined;
+    const ret = s.secp256k1_xonly_pubkey_serialize(ctx, &xonly_pubkey_ser, xonly_pubkey);
+    std.debug.assert(ret == 1);
+    return xonly_pubkey_ser;
+}
+
+const KeyMaterial = struct {
+    seckey: [32]u8,
+    plain_pubkey: s.secp256k1_pubkey,
+    xonly_pubkey: s.secp256k1_xonly_pubkey,
+    keypair: s.secp256k1_keypair,
+};
+
+fn deterministicKeypair(ctx: ?*const s.secp256k1_context, id: u64) KeyMaterial {
+    var id_ser: [8]u8 = undefined;
+    var seckey: [32]u8 = undefined;
+    var plain_pubkey: s.secp256k1_pubkey = undefined;
+    var xonly_pubkey: s.secp256k1_xonly_pubkey = undefined;
+    var keypair: s.secp256k1_keypair = undefined;
+
+    std.mem.writeInt(u64, &id_ser, id, .big);
+    Sha256.hash(&id_ser, &seckey, .{});
+    var ret = s.secp256k1_keypair_create(ctx, &keypair, &seckey);
+    std.debug.assert(ret == 1);
+    ret = s.secp256k1_keypair_pub(ctx, &plain_pubkey, &keypair);
+    std.debug.assert(ret == 1);
+    ret = s.secp256k1_keypair_xonly_pub(ctx, &xonly_pubkey, null, &keypair);
+    std.debug.assert(ret == 1);
+    return KeyMaterial {
+        .seckey = seckey,
+        .plain_pubkey = plain_pubkey,
+        .xonly_pubkey = xonly_pubkey,
+        .keypair = keypair
+    };
+}
 
 pub fn main() !void {
     const ctx = s.secp256k1_context_create(s.SECP256K1_CONTEXT_NONE);
     defer s.secp256k1_context_destroy(ctx);
 
-    var seckey: [32]u8 = undefined;
-    std.mem.writeInt(u256, &seckey, 1, .big);
+    // silent payments experiments
+    const scan_keymaterial = deterministicKeypair(ctx, 23);
+    const spend_keymaterial = deterministicKeypair(ctx, 42);
+    const scan_pubkey_bytes = pubkeySerialize(ctx, &scan_keymaterial.plain_pubkey);
+    const spend_pubkey_bytes = pubkeySerialize(ctx, &spend_keymaterial.plain_pubkey);
+    std.debug.print(" Scan pubkey: {s}\n", .{std.fmt.bytesToHex(&scan_pubkey_bytes, .lower)});
+    std.debug.print("Spend pubkey: {s}\n", .{std.fmt.bytesToHex(&spend_pubkey_bytes, .lower)});
+    std.debug.print("\n", .{});
 
-    var pubkey: s.secp256k1_pubkey = undefined;
-    const ret = s.secp256k1_ec_pubkey_create(ctx, &pubkey, &seckey);
+    const input_keymaterial = deterministicKeypair(ctx, 123);
+    const input_pubkey_bytes = pubkeySerialize(ctx, &input_keymaterial.plain_pubkey);
+    std.debug.print("Input pubkey: {s}\n", .{std.fmt.bytesToHex(&input_pubkey_bytes, .lower)});
+
+    // simple send with one legacy input, 10 recipients (all having the same addresss)
+    var recipient_xpks: [10]s.secp256k1_xonly_pubkey = undefined;
+    var recipient_xpks_ptrs: [10]*s.secp256k1_xonly_pubkey = undefined;
+    var recipients: [10]s.secp256k1_silentpayments_recipient = undefined;
+    var recipients_ptrs: [10]*s.secp256k1_silentpayments_recipient = undefined;
+    for (0..10) |i| {
+        recipient_xpks_ptrs[i] = &recipient_xpks[i];
+        recipients_ptrs[i] = &recipients[i];
+        recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
+        recipients[i].labeled_spend_pubkey = spend_keymaterial.plain_pubkey;
+        recipients[i].index = i;
+    }
+    var seckey_ptrs: [1]*const u8 = .{ &input_keymaterial.seckey[0] };
+    var outpoint_smallest: [36]u8 = undefined;
+    Sha256.hash("smallest outpoint", outpoint_smallest[0..32], .{});
+    std.mem.writeInt(u32, outpoint_smallest[32..36], 31337, .big);
+
+    const ret = s.secp256k1_silentpayments_sender_create_outputs(ctx,
+        @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), 10,
+        &outpoint_smallest, null, 0, &seckey_ptrs, 1);
     std.debug.assert(ret == 1);
+    std.debug.print("Sending, created output x-only pubkeys:\n", .{});
+    for (recipient_xpks_ptrs) |generated_output| {
+        var output_ser = xonlyPubkeySerialize(ctx, generated_output);
+        std.debug.print("-> {s}\n", .{std.fmt.bytesToHex(&output_ser, .lower)});
+    }
 
-    var pubkey_bytes: [33]u8 = undefined;
-    var pubkey_len: usize = 33;
-    const ret2 = s.secp256k1_ec_pubkey_serialize(ctx, &pubkey_bytes, &pubkey_len, &pubkey, s.SECP256K1_EC_COMPRESSED);
-    std.debug.assert(ret2 == 1 and pubkey_len == 33);
-    const pubkey_hex = std.fmt.bytesToHex(&pubkey_bytes, .lower);
-    std.debug.print("pubkey of seckey 1: {s}\n", .{pubkey_hex});
+    // TODO: implement receiver counterpart (output scanning)
 }

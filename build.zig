@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) !void {
         "-B", secp256k1_build_dir.getPath(b),
         "-S", secp256k1_root_dir.getPath(b),
         "-DSECP256K1_DISABLE_SHARED=ON",
+        "-DSECP256K1_ENABLE_MODULE_SILENTPAYMENTS=ON",
         "-DSECP256K1_BUILD_BENCHMARK=OFF",
         "-DSECP256K1_BUILD_TESTS=OFF",
         "-DSECP256K1_BUILD_EXHAUSTIVE_TESTS=OFF",
