@@ -81,9 +81,16 @@ pub fn main() !void {
         recipients[i].index = i;
     }
     var seckey_ptrs: [1]*const u8 = .{ &input_keymaterial.seckey[0] };
-    var outpoint_smallest: [36]u8 = undefined;
+    //var outpoint_smallest: [36]u8 = undefined;
+    //Sha256.hash("smallest outpoint", outpoint_smallest[0..32], .{});
+    //std.mem.writeInt(u32, outpoint_smallest[32..36], 31337, .big);
+
+    // PoC: intentionally use the wrong size for the outpoint, to check if
+    // the compiler can detect this error if the C function signature uses
+    // `(*arg)[size]`, see https://github.com/bitcoin-core/secp256k1/issues/1710
+    var outpoint_smallest: [35]u8 = undefined;
     Sha256.hash("smallest outpoint", outpoint_smallest[0..32], .{});
-    std.mem.writeInt(u32, outpoint_smallest[32..36], 31337, .big);
+    std.mem.writeInt(u24, outpoint_smallest[32..35], 31337, .big);
 
     const ret = s.secp256k1_silentpayments_sender_create_outputs(ctx,
         @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), 10,

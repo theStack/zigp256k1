@@ -37,10 +37,10 @@
     // internet connectivity.
     .dependencies = .{
         .secp256k1 = .{
-            // commit hash points to PR #1698 (https://github.com/bitcoin-core/secp256k1/pull/1698),
-            // has to be updated regularly after each push
-            .url = "git+https://github.com/bitcoin-core/secp256k1/#e35bedeca6318011afbd59bba6f412a85c33e134",
-            .hash = "N-V-__8AAOTfYQBSs-N4CdZ1u-JMSBOwtiqJ2f73XQ9_qK38",
+            // commit hash points to a variant where the function signatures use `(*arg)[size]` for
+            // fixed length array arguments; we want to check if zig can infer those
+            .url = "git+https://github.com/josibake/secp256k1/#5a1088066b2ce5e2e77b4e4bc190575d1171c374",
+            .hash = "N-V-__8AAK_hYQBdy3GBnEgb_p8tXFZgJwFZXdcl0neMi_Lr",
         },
     },
     .paths = .{
