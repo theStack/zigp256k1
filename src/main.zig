@@ -77,7 +77,7 @@ pub fn main() !void {
         recipient_xpks_ptrs[i] = &recipient_xpks[i];
         recipients_ptrs[i] = &recipients[i];
         recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
-        recipients[i].labeled_spend_pubkey = spend_keymaterial.plain_pubkey;
+        recipients[i].spend_pubkey = spend_keymaterial.plain_pubkey;
         recipients[i].index = i;
     }
     var seckey_ptrs: [1]*const u8 = .{ &input_keymaterial.seckey[0] };
@@ -96,20 +96,20 @@ pub fn main() !void {
     }
 
     // scan in light client mode (i.e. we don't have access to full transaction)
-    var public_data: s.secp256k1_silentpayments_recipient_public_data = undefined;
+    var public_data: s.secp256k1_silentpayments_prevouts_summary = undefined;
     var public_data_ser: [33]u8 = undefined;
     var input_pks: [1]s.secp256k1_pubkey = undefined;
     var input_pks_ptrs: [1]*s.secp256k1_pubkey = undefined;
     input_pks[0] = input_keymaterial.plain_pubkey;
     input_pks_ptrs[0] = &input_pks[0];
-    ret = s.secp256k1_silentpayments_recipient_public_data_create(ctx,
+    ret = s.secp256k1_silentpayments_recipient_prevouts_summary_create(ctx,
         &public_data, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), 1);
     std.debug.assert(ret == 1);
 
-    ret = s.secp256k1_silentpayments_recipient_public_data_serialize(ctx,
+    ret = s.secp256k1_silentpayments_recipient_prevouts_summary_serialize(ctx,
         &public_data_ser, &public_data);
     std.debug.assert(ret == 1);
-    ret = s.secp256k1_silentpayments_recipient_public_data_parse(ctx,
+    ret = s.secp256k1_silentpayments_recipient_prevouts_summary_parse(ctx,
         &public_data, &public_data_ser);
     std.debug.assert(ret == 1);
 

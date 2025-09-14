@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) !void {
         "cmake",
         "-B", secp256k1_build_dir.getPath(b),
         "-S", secp256k1_root_dir.getPath(b),
-        "-DSECP256K1_DISABLE_SHARED=ON",
+        "-DBUILD_SHARED_LIBS=OFF",
         "-DSECP256K1_ENABLE_MODULE_SILENTPAYMENTS=ON",
         "-DSECP256K1_BUILD_BENCHMARK=OFF",
         "-DSECP256K1_BUILD_TESTS=OFF",
@@ -32,9 +32,11 @@ pub fn build(b: *std.Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "zigp256k1",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     exe.step.dependOn(&secp256k1_cmake_build.step);
     exe.linkLibC();

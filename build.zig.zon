@@ -28,7 +28,7 @@
 
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.14.0+5ad91a646",
+    .minimum_zig_version = "0.15.1",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
@@ -39,8 +39,8 @@
         .secp256k1 = .{
             // commit hash points to PR #1698 (https://github.com/bitcoin-core/secp256k1/pull/1698),
             // has to be updated regularly after each push
-            .url = "git+https://github.com/bitcoin-core/secp256k1/#e35bedeca6318011afbd59bba6f412a85c33e134",
-            .hash = "N-V-__8AAOTfYQBSs-N4CdZ1u-JMSBOwtiqJ2f73XQ9_qK38",
+            .url = "git+https://github.com/bitcoin-core/secp256k1/#64633f42d2e9a26d785115cb2712636cb9d6227e",
+            .hash = "N-V-__8AAMXSYQCRRzlB-Xbk_4TUw5gfks85HO-JA-fLkJ7L",
         },
     },
     .paths = .{
