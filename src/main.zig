@@ -6,6 +6,8 @@ const s = @cImport({
     @cInclude("secp256k1_silentpayments.h");
 });
 
+const N_RECIPIENTS = 10;
+
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
     var pubkey_ser: [33]u8 = undefined;
     var pubkey_len: usize = 33;
@@ -69,11 +71,11 @@ pub fn main() !void {
     std.debug.print("Input pubkey: {s}\n", .{std.fmt.bytesToHex(&input_pubkey_bytes, .lower)});
 
     // simple send with one legacy input, 10 recipients (all having the same addresss)
-    var recipient_xpks: [10]s.secp256k1_xonly_pubkey = undefined;
-    var recipient_xpks_ptrs: [10]*s.secp256k1_xonly_pubkey = undefined;
-    var recipients: [10]s.secp256k1_silentpayments_recipient = undefined;
-    var recipients_ptrs: [10]*s.secp256k1_silentpayments_recipient = undefined;
-    for (0..10) |i| {
+    var recipient_xpks: [N_RECIPIENTS]s.secp256k1_xonly_pubkey = undefined;
+    var recipient_xpks_ptrs: [N_RECIPIENTS]*s.secp256k1_xonly_pubkey = undefined;
+    var recipients: [N_RECIPIENTS]s.secp256k1_silentpayments_recipient = undefined;
+    var recipients_ptrs: [N_RECIPIENTS]*s.secp256k1_silentpayments_recipient = undefined;
+    for (0..N_RECIPIENTS) |i| {
         recipient_xpks_ptrs[i] = &recipient_xpks[i];
         recipients_ptrs[i] = &recipients[i];
         recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
@@ -86,7 +88,7 @@ pub fn main() !void {
     std.mem.writeInt(u32, outpoint_smallest[32..36], 31337, .big);
 
     var ret = s.secp256k1_silentpayments_sender_create_outputs(ctx,
-        @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), 10,
+        @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), N_RECIPIENTS,
         &outpoint_smallest, null, 0, &seckey_ptrs, 1);
     std.debug.assert(ret == 1);
     std.debug.print("Sending, created output x-only pubkeys:\n", .{});
@@ -137,4 +139,7 @@ pub fn main() !void {
             }
         }
     }
+
+    // TODO: full scan (i.e. we do have access to the full transaction, including prevouts data)
+    //ret = s.secp256k1_silentpayments_sender_prevouts_summary_create(ctx, ......
 }
