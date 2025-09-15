@@ -136,6 +136,7 @@ pub fn main() !void {
 
     var k: u32 = 0;
     var continue_scanning = true;
+    var lc_found_outputs: usize = 0;
     while (continue_scanning) : (k += 1) {
         var output_candidate: s.secp256k1_xonly_pubkey = undefined;
         ret = s.secp256k1_silentpayments_recipient_create_output_pubkey(ctx,
@@ -148,6 +149,7 @@ pub fn main() !void {
                 const candidate_ser = xonlyPubkeySerialize(ctx, &output_candidate);
                 std.debug.print("for k={d}, light client scanning found pubkey {s} at index {d}\n",
                     .{k, std.fmt.bytesToHex(&candidate_ser, .lower), i});
+                lc_found_outputs += 1;
                 continue_scanning = true;
                 break;
             }
@@ -171,5 +173,16 @@ pub fn main() !void {
         const output_ser = xonlyPubkeySerialize(ctx, &found_output.output);
         std.debug.print("-> pubkey {s},\n   output tweak {s}\n",
             .{std.fmt.bytesToHex(&output_ser, .lower), std.fmt.bytesToHex(found_output.tweak, .lower)});
+    }
+
+    if (lc_found_outputs == N_RECIPIENTS) {
+        std.debug.print("Light client scan SUCCEEDED, found all {d} outputs.\n", .{N_RECIPIENTS});
+    } else {
+        std.debug.print("Light client scan FAILED, found only {d}/{d} outputs.\n", .{lc_found_outputs, N_RECIPIENTS});
+    }
+    if (n_found_outputs == N_RECIPIENTS) {
+        std.debug.print("Full scan SUCCEEDED, found all {d} outputs.\n", .{N_RECIPIENTS});
+    } else {
+        std.debug.print("Full scan FAILED, found only {d}/{d} outputs.\n", .{n_found_outputs, N_RECIPIENTS});
     }
 }
