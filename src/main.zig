@@ -106,8 +106,8 @@ pub fn main() !void {
     }
 
     // scan in light client mode (i.e. we don't have access to full transaction)
-    var public_data: s.secp256k1_silentpayments_prevouts_summary = undefined;
-    var public_data_ser: [33]u8 = undefined;
+    var prevouts_summary: s.secp256k1_silentpayments_prevouts_summary = undefined;
+    var prevouts_summary_ser: [33]u8 = undefined;
     var input_pks: [N_INPUTS]s.secp256k1_pubkey = undefined;
     var input_pks_ptrs: [N_INPUTS]*s.secp256k1_pubkey = undefined;
     for (0..N_INPUTS) |i| {
@@ -115,19 +115,19 @@ pub fn main() !void {
         input_pks_ptrs[i] = &input_pks[i];
     }
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_create(ctx,
-        &public_data, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), N_INPUTS);
+        &prevouts_summary, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), N_INPUTS);
     std.debug.assert(ret == 1);
 
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_serialize(ctx,
-        &public_data_ser, &public_data);
+        &prevouts_summary_ser, &prevouts_summary);
     std.debug.assert(ret == 1);
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_parse(ctx,
-        &public_data, &public_data_ser);
+        &prevouts_summary, &prevouts_summary_ser);
     std.debug.assert(ret == 1);
 
     var shared_secret: [33]u8 = undefined;
     ret = s.secp256k1_silentpayments_recipient_create_shared_secret(ctx,
-        &shared_secret, &scan_keymaterial.seckey, &public_data);
+        &shared_secret, &scan_keymaterial.seckey, &prevouts_summary);
     std.debug.assert(ret == 1);
 
     var k: u32 = 0;
