@@ -105,7 +105,8 @@ pub fn main() !void {
         std.debug.print("-> {s}\n", .{std.fmt.bytesToHex(&output_ser, .lower)});
     }
 
-    // scan in light client mode (i.e. we don't have access to full transaction)
+    // create prevouts summary (the serialized variant would be created by an indexer
+    // and provided to light clients)
     var prevouts_summary: s.secp256k1_silentpayments_prevouts_summary = undefined;
     var prevouts_summary_ser: [33]u8 = undefined;
     var input_pks: [N_INPUTS]s.secp256k1_pubkey = undefined;
@@ -121,13 +122,16 @@ pub fn main() !void {
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_serialize(ctx,
         &prevouts_summary_ser, &prevouts_summary);
     std.debug.assert(ret == 1);
+
+    // scan in light client mode (i.e. we don't have access to full transaction)
+    var prevouts_summary_lc: s.secp256k1_silentpayments_prevouts_summary = undefined;
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_parse(ctx,
-        &prevouts_summary, &prevouts_summary_ser);
+        &prevouts_summary_lc, &prevouts_summary_ser);
     std.debug.assert(ret == 1);
 
     var shared_secret: [33]u8 = undefined;
     ret = s.secp256k1_silentpayments_recipient_create_shared_secret(ctx,
-        &shared_secret, &scan_keymaterial.seckey, &prevouts_summary);
+        &shared_secret, &scan_keymaterial.seckey, &prevouts_summary_lc);
     std.debug.assert(ret == 1);
 
     var k: u32 = 0;
