@@ -142,7 +142,7 @@ pub fn main() !void {
         for (recipient_xpks_ptrs, 0..) |output_xpk_ptr, i| {
             if (s.secp256k1_xonly_pubkey_cmp(ctx, &output_candidate, output_xpk_ptr) == 0) {
                 const candidate_ser = xonlyPubkeySerialize(ctx, &output_candidate);
-                std.debug.print("for k={d}, scanning found pubkey {s} at index {d}\n",
+                std.debug.print("for k={d}, light client scanning found pubkey {s} at index {d}\n",
                     .{k, std.fmt.bytesToHex(&candidate_ser, .lower), i});
                 continue_scanning = true;
                 break;
@@ -150,6 +150,22 @@ pub fn main() !void {
         }
     }
 
-    // TODO: full scan (i.e. we do have access to the full transaction, including prevouts data)
-    //ret = s.secp256k1_silentpayments_sender_prevouts_summary_create(ctx, ......
+    // full scan (i.e. we do have access to the full transaction, including prevouts data)
+    var found_outputs: [N_RECIPIENTS]s.secp256k1_silentpayments_found_output = undefined;
+    var found_outputs_ptrs: [N_RECIPIENTS]*s.secp256k1_silentpayments_found_output = undefined;
+    var n_found_outputs: usize = undefined;
+    for (0..N_RECIPIENTS) |i| {
+        found_outputs_ptrs[i] = &found_outputs[i];
+    }
+    ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
+        @ptrCast(&found_outputs_ptrs), &n_found_outputs, @ptrCast(&recipient_xpks_ptrs), N_RECIPIENTS,
+        &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, null, null);
+    std.debug.assert(ret == 1);
+    std.debug.print("full scanning found the following outputs:\n", .{});
+    for (0..n_found_outputs) |i| {
+        const found_output = &found_outputs[i];
+        const output_ser = xonlyPubkeySerialize(ctx, &found_output.output);
+        std.debug.print("-> pubkey {s},\n   output tweak {s}\n",
+            .{std.fmt.bytesToHex(&output_ser, .lower), std.fmt.bytesToHex(found_output.tweak, .lower)});
+    }
 }
