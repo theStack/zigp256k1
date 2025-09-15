@@ -6,6 +6,7 @@ const s = @cImport({
     @cInclude("secp256k1_silentpayments.h");
 });
 
+const N_INPUTS = 5;
 const N_RECIPIENTS = 10;
 
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
@@ -66,11 +67,14 @@ pub fn main() !void {
     std.debug.print("Spend pubkey: {s}\n", .{std.fmt.bytesToHex(&spend_pubkey_bytes, .lower)});
     std.debug.print("\n", .{});
 
-    const input_keymaterial = deterministicKeypair(ctx, 123);
-    const input_pubkey_bytes = pubkeySerialize(ctx, &input_keymaterial.plain_pubkey);
-    std.debug.print("Input pubkey: {s}\n", .{std.fmt.bytesToHex(&input_pubkey_bytes, .lower)});
+    var input_keymaterial: [N_INPUTS]KeyMaterial = undefined;
+    for (0..N_INPUTS) |i| {
+        input_keymaterial[i] = deterministicKeypair(ctx, 123 * (i+1));
+        const input_pubkey_bytes = pubkeySerialize(ctx, &input_keymaterial[i].plain_pubkey);
+        std.debug.print("Input pubkey[{d}]: {s}\n", .{i, std.fmt.bytesToHex(&input_pubkey_bytes, .lower)});
+    }
 
-    // simple send with one legacy input, 10 recipients (all having the same addresss)
+    // simple send with five legacy inputs, 10 recipients (all having the same addresss)
     var recipient_xpks: [N_RECIPIENTS]s.secp256k1_xonly_pubkey = undefined;
     var recipient_xpks_ptrs: [N_RECIPIENTS]*s.secp256k1_xonly_pubkey = undefined;
     var recipients: [N_RECIPIENTS]s.secp256k1_silentpayments_recipient = undefined;
@@ -82,16 +86,20 @@ pub fn main() !void {
         recipients[i].spend_pubkey = spend_keymaterial.plain_pubkey;
         recipients[i].index = i;
     }
-    var seckey_ptrs: [1]*const u8 = .{ &input_keymaterial.seckey[0] };
+    var seckey_ptrs: [N_INPUTS]*const u8 = undefined;
+    for (0..N_INPUTS) |i| {
+        seckey_ptrs[i] = &input_keymaterial[i].seckey[0];
+    }
     var outpoint_smallest: [36]u8 = undefined;
     Sha256.hash("smallest outpoint", outpoint_smallest[0..32], .{});
     std.mem.writeInt(u32, outpoint_smallest[32..36], 31337, .big);
 
     var ret = s.secp256k1_silentpayments_sender_create_outputs(ctx,
         @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), N_RECIPIENTS,
-        &outpoint_smallest, null, 0, &seckey_ptrs, 1);
+        &outpoint_smallest, null, 0, &seckey_ptrs, N_INPUTS);
     std.debug.assert(ret == 1);
-    std.debug.print("Sending, created output x-only pubkeys:\n", .{});
+    std.debug.print("Sending ({d} inputs, {d} recipients), created output x-only pubkeys:\n",
+        .{N_INPUTS, N_RECIPIENTS});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
         std.debug.print("-> {s}\n", .{std.fmt.bytesToHex(&output_ser, .lower)});
@@ -100,12 +108,14 @@ pub fn main() !void {
     // scan in light client mode (i.e. we don't have access to full transaction)
     var public_data: s.secp256k1_silentpayments_prevouts_summary = undefined;
     var public_data_ser: [33]u8 = undefined;
-    var input_pks: [1]s.secp256k1_pubkey = undefined;
-    var input_pks_ptrs: [1]*s.secp256k1_pubkey = undefined;
-    input_pks[0] = input_keymaterial.plain_pubkey;
-    input_pks_ptrs[0] = &input_pks[0];
+    var input_pks: [N_INPUTS]s.secp256k1_pubkey = undefined;
+    var input_pks_ptrs: [N_INPUTS]*s.secp256k1_pubkey = undefined;
+    for (0..N_INPUTS) |i| {
+        input_pks[i] = input_keymaterial[i].plain_pubkey;
+        input_pks_ptrs[i] = &input_pks[i];
+    }
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_create(ctx,
-        &public_data, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), 1);
+        &public_data, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), N_INPUTS);
     std.debug.assert(ret == 1);
 
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_serialize(ctx,
