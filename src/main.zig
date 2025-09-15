@@ -63,15 +63,15 @@ pub fn main() !void {
     const spend_keymaterial = deterministicKeypair(ctx, 42);
     const scan_pubkey_bytes = pubkeySerialize(ctx, &scan_keymaterial.plain_pubkey);
     const spend_pubkey_bytes = pubkeySerialize(ctx, &spend_keymaterial.plain_pubkey);
-    std.debug.print(" Scan pubkey: {s}\n", .{std.fmt.bytesToHex(&scan_pubkey_bytes, .lower)});
-    std.debug.print("Spend pubkey: {s}\n", .{std.fmt.bytesToHex(&spend_pubkey_bytes, .lower)});
+    std.debug.print(" Scan pubkey: {x}\n", .{&scan_pubkey_bytes});
+    std.debug.print("Spend pubkey: {x}\n", .{&spend_pubkey_bytes});
     std.debug.print("\n", .{});
 
     var input_keymaterial: [N_INPUTS]KeyMaterial = undefined;
     for (0..N_INPUTS) |i| {
         input_keymaterial[i] = deterministicKeypair(ctx, 123 * (i+1));
         const input_pubkey_bytes = pubkeySerialize(ctx, &input_keymaterial[i].plain_pubkey);
-        std.debug.print("Input pubkey[{d}]: {s}\n", .{i, std.fmt.bytesToHex(&input_pubkey_bytes, .lower)});
+        std.debug.print("Input pubkey[{d}]: {x}\n", .{i, &input_pubkey_bytes});
     }
 
     // simple send with five legacy inputs, 10 recipients (all having the same addresss)
@@ -102,7 +102,7 @@ pub fn main() !void {
         .{N_INPUTS, N_RECIPIENTS});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
-        std.debug.print("-> {s}\n", .{std.fmt.bytesToHex(&output_ser, .lower)});
+        std.debug.print("-> {x}\n", .{&output_ser});
     }
 
     // create prevouts summary (the serialized variant would be created by an indexer
@@ -147,8 +147,8 @@ pub fn main() !void {
         for (recipient_xpks_ptrs, 0..) |output_xpk_ptr, i| {
             if (s.secp256k1_xonly_pubkey_cmp(ctx, &output_candidate, output_xpk_ptr) == 0) {
                 const candidate_ser = xonlyPubkeySerialize(ctx, &output_candidate);
-                std.debug.print("for k={d}, light client scanning found pubkey {s} at index {d}\n",
-                    .{k, std.fmt.bytesToHex(&candidate_ser, .lower), i});
+                std.debug.print("for k={d}, light client scanning found pubkey {x} at index {d}\n",
+                    .{k, &candidate_ser, i});
                 lc_found_outputs += 1;
                 continue_scanning = true;
                 break;
@@ -171,8 +171,8 @@ pub fn main() !void {
     for (0..n_found_outputs) |i| {
         const found_output = &found_outputs[i];
         const output_ser = xonlyPubkeySerialize(ctx, &found_output.output);
-        std.debug.print("-> pubkey {s},\n   output tweak {s}\n",
-            .{std.fmt.bytesToHex(&output_ser, .lower), std.fmt.bytesToHex(found_output.tweak, .lower)});
+        std.debug.print("-> pubkey {x},\n   output tweak {x}\n",
+            .{&output_ser, found_output.tweak});
     }
 
     if (lc_found_outputs == N_RECIPIENTS) {
@@ -185,4 +185,5 @@ pub fn main() !void {
     } else {
         std.debug.print("Full scan FAILED, found only {d}/{d} outputs.\n", .{n_found_outputs, N_RECIPIENTS});
     }
+    // TODO: if the outputs are shuffled, all of them should be found too
 }
