@@ -104,6 +104,14 @@ pub fn main() !void {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
         std.debug.print("-> {x}\n", .{&output_ser});
     }
+    var rng = std.Random.DefaultPrng.init(31337);
+    rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs[0..]);
+
+    std.debug.print("--- Shuffled outputs, for the sake of testing: ---\n", .{});
+    for (recipient_xpks_ptrs) |generated_output| {
+        const output_ser = xonlyPubkeySerialize(ctx, generated_output);
+        std.debug.print("-> {x}\n", .{&output_ser});
+    }
 
     // create prevouts summary (the serialized variant would be created by an indexer
     // and provided to light clients)
