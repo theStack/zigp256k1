@@ -39,8 +39,8 @@
         .secp256k1 = .{
             // commit hash points to PR #1698 (https://github.com/bitcoin-core/secp256k1/pull/1698),
             // has to be updated regularly after each push
-            .url = "git+https://github.com/bitcoin-core/secp256k1/#64633f42d2e9a26d785115cb2712636cb9d6227e",
-            .hash = "N-V-__8AAMXSYQCRRzlB-Xbk_4TUw5gfks85HO-JA-fLkJ7L",
+            .url = "git+https://github.com/bitcoin-core/secp256k1/#a0d2a33690e51b79aee037a50ce78e438849b823",
+            .hash = "N-V-__8AAP7iYQCcLOQzM3iHEjfGHCS-2EfjJkhhVJv5W2vi",
         },
     },
     .paths = .{
