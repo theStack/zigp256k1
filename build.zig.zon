@@ -37,10 +37,10 @@
     // internet connectivity.
     .dependencies = .{
         .secp256k1 = .{
-            // commit hash points to PR #1698 (https://github.com/bitcoin-core/secp256k1/pull/1698),
+            // commit hash points to PR #1765 (https://github.com/bitcoin-core/secp256k1/pull/1765),
             // has to be updated regularly after each push
-            .url = "git+https://github.com/bitcoin-core/secp256k1/#a0d2a33690e51b79aee037a50ce78e438849b823",
-            .hash = "N-V-__8AAP7iYQCcLOQzM3iHEjfGHCS-2EfjJkhhVJv5W2vi",
+            .url = "git+https://github.com/bitcoin-core/secp256k1/#fed508d99a2d913c97c41f807210b7da1e11f17c",
+            .hash = "N-V-__8AAHVAYgAeumEiOYzNWuFywFlgrLlLr7vqopKPgOjW",
         },
     },
     .paths = .{
