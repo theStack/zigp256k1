@@ -32,14 +32,17 @@ const KeyMaterial = struct {
 };
 
 fn deterministicKeypair(ctx: ?*const s.secp256k1_context, id: u64) KeyMaterial {
-    var id_ser: [8]u8 = undefined;
+    //var id_ser: [8]u8 = undefined;
     var seckey: [32]u8 = undefined;
     var plain_pubkey: s.secp256k1_pubkey = undefined;
     var xonly_pubkey: s.secp256k1_xonly_pubkey = undefined;
     var keypair: s.secp256k1_keypair = undefined;
 
-    std.mem.writeInt(u64, &id_ser, id, .big);
-    Sha256.hash(&id_ser, &seckey, .{});
+    //std.mem.writeInt(u64, &id_ser, id, .big);
+    //Sha256.hash(&id_ser, &seckey, .{});
+    @memset(&seckey, 0);
+    std.mem.writeInt(u64, seckey[24..], id, .big);
+
     var ret = s.secp256k1_keypair_create(ctx, &keypair, &seckey);
     std.debug.assert(ret == 1);
     ret = s.secp256k1_keypair_pub(ctx, &plain_pubkey, &keypair);
@@ -54,17 +57,50 @@ fn deterministicKeypair(ctx: ?*const s.secp256k1_context, id: u64) KeyMaterial {
     };
 }
 
+const LabelData = struct {
+    label: s.secp256k1_silentpayments_label,
+    label_tweak: [32]u8,
+};
+
+fn spCreateLabel(ctx: ?*const s.secp256k1_context, scan_key: [32]u8, m: u32) LabelData {
+    var new_label: LabelData = undefined;
+    const ret = s.secp256k1_silentpayments_recipient_label_create(ctx,
+        &new_label.label, &new_label.label_tweak, &scan_key, m);
+    std.debug.assert(ret == 1);
+    return new_label;
+}
+
+fn spCreateLabeledSpendPubkey(ctx: ?*const s.secp256k1_context, unlabeled_spend_pubkey: *const s.secp256k1_pubkey, label: *const s.secp256k1_silentpayments_label) s.secp256k1_pubkey {
+    var labeled_spend_pubkey: s.secp256k1_pubkey = undefined;
+    const ret = s.secp256k1_silentpayments_recipient_create_labeled_spend_pubkey(ctx,
+        &labeled_spend_pubkey, unlabeled_spend_pubkey, label);
+    std.debug.assert(ret == 1);
+    return labeled_spend_pubkey;
+}
+
+fn labelLookupFn(label33: [*c]const u8, label_context: ?*const anyopaque) callconv(.C) [*c]const u8 {
+    _ = label33;
+    _ = label_context;
+    return null;
+}
+
 pub fn main() !void {
     const ctx = s.secp256k1_context_create(s.SECP256K1_CONTEXT_NONE);
     defer s.secp256k1_context_destroy(ctx);
 
-    // silent payments experiments
-    const scan_keymaterial = deterministicKeypair(ctx, 23);
-    const spend_keymaterial = deterministicKeypair(ctx, 42);
+    // silent payments key material
+    const scan_keymaterial = deterministicKeypair(ctx, 0xdead);
+    const spend_keymaterial = deterministicKeypair(ctx, 0xbeef);
     const scan_pubkey_bytes = pubkeySerialize(ctx, &scan_keymaterial.plain_pubkey);
     const spend_pubkey_bytes = pubkeySerialize(ctx, &spend_keymaterial.plain_pubkey);
-    std.debug.print(" Scan pubkey: {x}\n", .{&scan_pubkey_bytes});
-    std.debug.print("Spend pubkey: {x}\n", .{&spend_pubkey_bytes});
+    // label it (only change label for now, i.e. m=0)
+    const change_label_data = spCreateLabel(ctx, scan_keymaterial.seckey, 0);
+    const labeled_spend_pubkey = spCreateLabeledSpendPubkey(ctx, &spend_keymaterial.plain_pubkey, &change_label_data.label);
+    const labeled_spend_pubkey_bytes = pubkeySerialize(ctx, &labeled_spend_pubkey);
+
+    std.debug.print("  Scan public key: {x}\n", .{&scan_pubkey_bytes});
+    std.debug.print(" Spend public key: {x}\n", .{&spend_pubkey_bytes});
+    std.debug.print("Labeled spend key: {x}\n", .{&labeled_spend_pubkey_bytes});
     std.debug.print("\n", .{});
 
     var input_keymaterial: [N_INPUTS]KeyMaterial = undefined;
