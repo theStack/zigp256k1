@@ -1,12 +1,11 @@
 const std = @import("std");
-const Sha256 = std.crypto.hash.sha2.Sha256;
 const s = @cImport({
     @cInclude("secp256k1.h");
     @cInclude("secp256k1_extrakeys.h");
     @cInclude("secp256k1_silentpayments.h");
 });
 
-const N_INPUTS = 5;
+const N_INPUTS = 1;
 const N_RECIPIENTS = 10;
 
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
@@ -32,17 +31,13 @@ const KeyMaterial = struct {
 };
 
 fn deterministicKeypair(ctx: ?*const s.secp256k1_context, id: u64) KeyMaterial {
-    //var id_ser: [8]u8 = undefined;
     var seckey: [32]u8 = undefined;
     var plain_pubkey: s.secp256k1_pubkey = undefined;
     var xonly_pubkey: s.secp256k1_xonly_pubkey = undefined;
     var keypair: s.secp256k1_keypair = undefined;
 
-    //std.mem.writeInt(u64, &id_ser, id, .big);
-    //Sha256.hash(&id_ser, &seckey, .{});
     @memset(&seckey, 0);
     std.mem.writeInt(u64, seckey[24..], id, .big);
-
     var ret = s.secp256k1_keypair_create(ctx, &keypair, &seckey);
     std.debug.assert(ret == 1);
     ret = s.secp256k1_keypair_pub(ctx, &plain_pubkey, &keypair);
@@ -79,6 +74,7 @@ fn spCreateLabeledSpendPubkey(ctx: ?*const s.secp256k1_context, unlabeled_spend_
 }
 
 fn labelLookupFn(label33: [*c]const u8, label_context: ?*const anyopaque) callconv(.C) [*c]const u8 {
+    // TODO: implement using hashmap
     _ = label33;
     _ = label_context;
     return null;
@@ -105,8 +101,8 @@ pub fn main() !void {
 
     var input_keymaterial: [N_INPUTS]KeyMaterial = undefined;
     for (0..N_INPUTS) |i| {
-        input_keymaterial[i] = deterministicKeypair(ctx, 123 * (i+1));
-        const input_pubkey_bytes = pubkeySerialize(ctx, &input_keymaterial[i].plain_pubkey);
+        input_keymaterial[i] = deterministicKeypair(ctx, 0x1337 * (i+1));
+        const input_pubkey_bytes = xonlyPubkeySerialize(ctx, &input_keymaterial[i].xonly_pubkey);
         std.debug.print("Input pubkey[{d}]: {x}\n", .{i, &input_pubkey_bytes});
     }
 
@@ -119,20 +115,20 @@ pub fn main() !void {
         recipient_xpks_ptrs[i] = &recipient_xpks[i];
         recipients_ptrs[i] = &recipients[i];
         recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
-        recipients[i].spend_pubkey = spend_keymaterial.plain_pubkey;
+        recipients[i].spend_pubkey = labeled_spend_pubkey;
         recipients[i].index = @intCast(i);
     }
-    var seckey_ptrs: [N_INPUTS]*const u8 = undefined;
+    var seckey_ptrs: [N_INPUTS]*const s.secp256k1_keypair = undefined;
     for (0..N_INPUTS) |i| {
-        seckey_ptrs[i] = &input_keymaterial[i].seckey[0];
+        seckey_ptrs[i] = &input_keymaterial[i].keypair;
     }
     var outpoint_smallest: [36]u8 = undefined;
-    Sha256.hash("smallest outpoint", outpoint_smallest[0..32], .{});
-    std.mem.writeInt(u32, outpoint_smallest[32..36], 31337, .big);
+    @memset(&outpoint_smallest, 0xcc);
+    std.mem.writeInt(u32, outpoint_smallest[32..36], 0, .big);
 
     var ret = s.secp256k1_silentpayments_sender_create_outputs(ctx,
         @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), N_RECIPIENTS,
-        &outpoint_smallest, null, 0, &seckey_ptrs, N_INPUTS);
+        &outpoint_smallest, &seckey_ptrs, N_INPUTS, null, 0);
     std.debug.assert(ret == 1);
     std.debug.print("Sending ({d} inputs, {d} recipients), created output x-only pubkeys:\n",
         .{N_INPUTS, N_RECIPIENTS});
