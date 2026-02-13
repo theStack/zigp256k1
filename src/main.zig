@@ -77,10 +77,13 @@ fn spCreateLabeledSpendPubkey(ctx: ?*const s.secp256k1_context, unlabeled_spend_
     return labeled_spend_pubkey;
 }
 
-fn labelLookupFn(label33: [*c]const u8, label_context: ?*const anyopaque) callconv(.C) [*c]const u8 {
-    // TODO: implement using hashmap
-    _ = label33;
-    _ = label_context;
+fn labelLookupFn(label33: [*c]const u8, label_context: ?*const anyopaque) callconv(.c) [*c]const u8 {
+    const label_cache: *std.AutoHashMap([33]u8, [32]u8) = @constCast(@ptrCast(@alignCast(label_context.?)));
+    var label: [33]u8 = undefined;
+    @memcpy(&label, label33);
+    if (label_cache.getPtr(label)) |label_tweak| {
+        return label_tweak;
+    }
     return null;
 }
 
@@ -99,7 +102,7 @@ pub fn main() !void {
     const labeled_spend_pubkey_bytes = pubkeySerialize(ctx, &labeled_spend_pubkey);
     var label_cache = std.AutoHashMap([33]u8, [32]u8).init(std.heap.page_allocator);
     defer label_cache.deinit();
-    // TODO: fill the cache and access it in the callback function above :)
+    try label_cache.put(change_label_data.label_serialized, change_label_data.label_tweak);
 
     std.debug.print("  Scan public key: {x}\n", .{&scan_pubkey_bytes});
     std.debug.print(" Spend public key: {x}\n", .{&spend_pubkey_bytes});
@@ -174,7 +177,7 @@ pub fn main() !void {
     }
     ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
         @ptrCast(&found_outputs_ptrs), &n_found_outputs, @ptrCast(&recipient_xpks_ptrs), N_RECIPIENTS,
-        &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, null, null);
+        &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
     std.debug.assert(ret == 1);
     std.debug.print("full scanning found the following outputs:\n", .{});
     for (0..n_found_outputs) |i| {
