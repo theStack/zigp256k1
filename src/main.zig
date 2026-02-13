@@ -84,7 +84,7 @@ pub fn main() !void {
         recipients_ptrs[i] = &recipients[i];
         recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
         recipients[i].spend_pubkey = spend_keymaterial.plain_pubkey;
-        recipients[i].index = i;
+        recipients[i].index = @intCast(i);
     }
     var seckey_ptrs: [N_INPUTS]*const u8 = undefined;
     for (0..N_INPUTS) |i| {
@@ -114,9 +114,8 @@ pub fn main() !void {
     }
 
     // create prevouts summary (the serialized variant would be created by an indexer
-    // and provided to light clients)
+    // and provided to light clients, but it's not available yet in #1765)
     var prevouts_summary: s.secp256k1_silentpayments_prevouts_summary = undefined;
-    var prevouts_summary_ser: [33]u8 = undefined;
     var input_pks: [N_INPUTS]s.secp256k1_pubkey = undefined;
     var input_pks_ptrs: [N_INPUTS]*s.secp256k1_pubkey = undefined;
     for (0..N_INPUTS) |i| {
@@ -127,41 +126,10 @@ pub fn main() !void {
         &prevouts_summary, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), N_INPUTS);
     std.debug.assert(ret == 1);
 
-    ret = s.secp256k1_silentpayments_recipient_prevouts_summary_serialize(ctx,
-        &prevouts_summary_ser, 33, &prevouts_summary, s.SECP256K1_EC_COMPRESSED);
-    std.debug.assert(ret == 1);
-
-    // scan in light client mode (i.e. we don't have access to full transaction)
-    var prevouts_summary_lc: s.secp256k1_silentpayments_prevouts_summary = undefined;
-    ret = s.secp256k1_silentpayments_recipient_prevouts_summary_parse(ctx,
-        &prevouts_summary_lc, &prevouts_summary_ser, 33);
-    std.debug.assert(ret == 1);
-
-    var lc_output_xpks: [1]s.secp256k1_xonly_pubkey = undefined;
-    var lc_output_xpks_ptrs: [1]*s.secp256k1_xonly_pubkey = undefined;
-    lc_output_xpks_ptrs[0] = &lc_output_xpks[0];
-    var lc_spendkey_pk_ptrs: [1]*const s.secp256k1_pubkey = undefined;
-    lc_spendkey_pk_ptrs[0] = &spend_keymaterial.plain_pubkey;
-    ret = s.secp256k1_silentpayments_recipient_create_output_pubkeys(ctx,
-        @ptrCast(&lc_output_xpks_ptrs), &scan_keymaterial.seckey, &prevouts_summary_lc,
-        @ptrCast(&lc_spendkey_pk_ptrs), 1);
-    std.debug.assert(ret == 1);
-
-    var lc_found_output: bool = false;
-    for (recipient_xpks_ptrs, 0..) |output_xpk_ptr, i| {
-        if (s.secp256k1_xonly_pubkey_cmp(ctx, &lc_output_xpks[0], output_xpk_ptr) == 0) {
-            const candidate_ser = xonlyPubkeySerialize(ctx, output_xpk_ptr);
-            std.debug.print("light client scanning found pubkey {x} at index {d} (fixed for k=0)\n",
-                .{&candidate_ser, i});
-            lc_found_output = true;
-            break;
-        }
-    }
-
     // full scan (i.e. we do have access to the full transaction, including prevouts data)
     var found_outputs: [N_RECIPIENTS]s.secp256k1_silentpayments_found_output = undefined;
     var found_outputs_ptrs: [N_RECIPIENTS]*s.secp256k1_silentpayments_found_output = undefined;
-    var n_found_outputs: usize = undefined;
+    var n_found_outputs: u32 = undefined;
     for (0..N_RECIPIENTS) |i| {
         found_outputs_ptrs[i] = &found_outputs[i];
     }
@@ -177,11 +145,6 @@ pub fn main() !void {
             .{&output_ser, found_output.tweak});
     }
 
-    if (lc_found_output) {
-        std.debug.print("Light client scan SUCCEEDED, found output for k=0.\n", .{});
-    } else {
-        std.debug.print("Light client scan FAILED, did'nt find any output.\n", .{});
-    }
     if (n_found_outputs == N_RECIPIENTS) {
         std.debug.print("Full scan SUCCEEDED, found all {d} outputs.\n", .{N_RECIPIENTS});
     } else {
