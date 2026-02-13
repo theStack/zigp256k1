@@ -208,10 +208,10 @@ pub fn main() !void {
         _ = output_ser;
     }
 
-    if (n_found_outputs == N_RECIPIENTS) {
-        std.debug.print("Full scan SUCCEEDED, found all {d} outputs.\n", .{N_RECIPIENTS});
+    if (n_found_outputs == K_MAX) {
+        std.debug.print("Full scan SUCCEEDED, found all {d} outputs.\n", .{K_MAX});
     } else {
-        std.debug.print("Full scan FAILED, found only {d}/{d} outputs.\n", .{n_found_outputs, N_RECIPIENTS});
+        std.debug.print("Full scan FAILED, found only {d}/{d} outputs.\n", .{n_found_outputs, K_MAX});
     }
     // TODO: if the outputs are shuffled, all of them should be found too
 }
