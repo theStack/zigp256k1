@@ -54,13 +54,17 @@ fn deterministicKeypair(ctx: ?*const s.secp256k1_context, id: u64) KeyMaterial {
 
 const LabelData = struct {
     label: s.secp256k1_silentpayments_label,
+    label_serialized: [33]u8,
     label_tweak: [32]u8,
 };
 
 fn spCreateLabel(ctx: ?*const s.secp256k1_context, scan_key: [32]u8, m: u32) LabelData {
     var new_label: LabelData = undefined;
-    const ret = s.secp256k1_silentpayments_recipient_label_create(ctx,
+    var ret = s.secp256k1_silentpayments_recipient_label_create(ctx,
         &new_label.label, &new_label.label_tweak, &scan_key, m);
+    std.debug.assert(ret == 1);
+    ret = s.secp256k1_silentpayments_recipient_label_serialize(ctx,
+        &new_label.label_serialized, &new_label.label);
     std.debug.assert(ret == 1);
     return new_label;
 }
@@ -93,6 +97,9 @@ pub fn main() !void {
     const change_label_data = spCreateLabel(ctx, scan_keymaterial.seckey, 0);
     const labeled_spend_pubkey = spCreateLabeledSpendPubkey(ctx, &spend_keymaterial.plain_pubkey, &change_label_data.label);
     const labeled_spend_pubkey_bytes = pubkeySerialize(ctx, &labeled_spend_pubkey);
+    var label_cache = std.AutoHashMap([33]u8, [32]u8).init(std.heap.page_allocator);
+    defer label_cache.deinit();
+    // TODO: fill the cache and access it in the callback function above :)
 
     std.debug.print("  Scan public key: {x}\n", .{&scan_pubkey_bytes});
     std.debug.print(" Spend public key: {x}\n", .{&spend_pubkey_bytes});
@@ -148,14 +155,14 @@ pub fn main() !void {
     // create prevouts summary (the serialized variant would be created by an indexer
     // and provided to light clients, but it's not available yet in #1765)
     var prevouts_summary: s.secp256k1_silentpayments_prevouts_summary = undefined;
-    var input_pks: [N_INPUTS]s.secp256k1_pubkey = undefined;
-    var input_pks_ptrs: [N_INPUTS]*s.secp256k1_pubkey = undefined;
+    var input_pks: [N_INPUTS]s.secp256k1_xonly_pubkey = undefined;
+    var input_pks_ptrs: [N_INPUTS]*s.secp256k1_xonly_pubkey = undefined;
     for (0..N_INPUTS) |i| {
-        input_pks[i] = input_keymaterial[i].plain_pubkey;
+        input_pks[i] = input_keymaterial[i].xonly_pubkey;
         input_pks_ptrs[i] = &input_pks[i];
     }
     ret = s.secp256k1_silentpayments_recipient_prevouts_summary_create(ctx,
-        &prevouts_summary, &outpoint_smallest, null, 0, @ptrCast(&input_pks_ptrs), N_INPUTS);
+        &prevouts_summary, &outpoint_smallest, @ptrCast(&input_pks_ptrs), N_INPUTS, null, 0);
     std.debug.assert(ret == 1);
 
     // full scan (i.e. we do have access to the full transaction, including prevouts data)
