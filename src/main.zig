@@ -7,8 +7,7 @@ const s = @cImport({
 
 const N_INPUTS = 1;
 const K_MAX = s.SECP256K1_SILENTPAYMENTS_RECIPIENT_GROUP_LIMIT;
-//const N_RECIPIENTS = 23255;
-const N_RECIPIENTS = K_MAX;
+const N_RECIPIENTS = 23255;
 
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
     var pubkey_ser: [33]u8 = undefined;
@@ -119,21 +118,28 @@ pub fn main() !void {
     }
 
     // send with one taproot input, K_max recipients (all having the same labeled addresss)
-    var recipient_xpks: [N_RECIPIENTS]s.secp256k1_xonly_pubkey = undefined;
-    var recipient_xpks_ptrs: [N_RECIPIENTS]*s.secp256k1_xonly_pubkey = undefined;
-    var recipients: [N_RECIPIENTS]s.secp256k1_silentpayments_recipient = undefined;
-    var recipients_ptrs: [N_RECIPIENTS]*s.secp256k1_silentpayments_recipient = undefined;
+    const allocator = std.heap.page_allocator;
+    var recipient_xpks = try allocator.alloc(s.secp256k1_xonly_pubkey, N_RECIPIENTS);
+    defer allocator.free(recipient_xpks);
+    var recipient_xpks_ptrs = try allocator.alloc(*s.secp256k1_xonly_pubkey, N_RECIPIENTS);
+    defer allocator.free(recipient_xpks_ptrs);
+    var recipients = try allocator.alloc(s.secp256k1_silentpayments_recipient, N_RECIPIENTS);
+    defer allocator.free(recipients);
+    var recipients_ptrs = try allocator.alloc(*s.secp256k1_silentpayments_recipient, N_RECIPIENTS);
+    defer allocator.free(recipients_ptrs);
     for (0..N_RECIPIENTS) |i| {
         recipient_xpks_ptrs[i] = &recipient_xpks[i];
         recipients_ptrs[i] = &recipients[i];
         if (i < K_MAX) {
             recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
         } else {
-            recipients[i].scan_pubkey = labeled_spend_pubkey; // bogus scan pubkey, won't match
+            const bogus_key = deterministicKeypair(ctx, 1000000 + i);
+            recipients[i].scan_pubkey = bogus_key.plain_pubkey; // bogus scan pubkey, won't match
         }
         recipients[i].spend_pubkey = labeled_spend_pubkey;
         recipients[i].index = @intCast(i);
     }
+
     var seckey_ptrs: [N_INPUTS]*const s.secp256k1_keypair = undefined;
     for (0..N_INPUTS) |i| {
         seckey_ptrs[i] = &input_keymaterial[i].keypair;
@@ -143,7 +149,7 @@ pub fn main() !void {
     std.mem.writeInt(u32, outpoint_smallest[32..36], 0, .big);
 
     var ret = s.secp256k1_silentpayments_sender_create_outputs(ctx,
-        @ptrCast(&recipient_xpks_ptrs), @ptrCast(&recipients_ptrs), N_RECIPIENTS,
+        @ptrCast(recipient_xpks_ptrs), @ptrCast(recipients_ptrs), N_RECIPIENTS,
         &outpoint_smallest, &seckey_ptrs, N_INPUTS, null, 0);
     std.debug.assert(ret == 1);
     std.debug.print("Sending ({d} inputs, {d} recipients), created output x-only pubkeys:\n",
@@ -154,8 +160,8 @@ pub fn main() !void {
         _ = output_ser;
     }
     // var rng = std.Random.DefaultPrng.init(31337);
-    // rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs[0..]);
-    std.mem.reverse(*s.secp256k1_xonly_pubkey, &recipient_xpks_ptrs);
+    // rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
+    std.mem.reverse(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
 
     std.debug.print("--- Shuffled outputs, for the sake of testing: ---\n", .{});
     for (recipient_xpks_ptrs) |generated_output| {
@@ -178,15 +184,17 @@ pub fn main() !void {
     std.debug.assert(ret == 1);
 
     // full scan (i.e. we do have access to the full transaction, including prevouts data)
-    var found_outputs: [N_RECIPIENTS]s.secp256k1_silentpayments_found_output = undefined;
-    var found_outputs_ptrs: [N_RECIPIENTS]*s.secp256k1_silentpayments_found_output = undefined;
+    var found_outputs = try allocator.alloc(s.secp256k1_silentpayments_found_output, N_RECIPIENTS);
+    defer allocator.free(found_outputs);
+    var found_outputs_ptrs = try allocator.alloc(*s.secp256k1_silentpayments_found_output, N_RECIPIENTS);
+    defer allocator.free(found_outputs_ptrs);
     var n_found_outputs: u32 = undefined;
     for (0..N_RECIPIENTS) |i| {
         found_outputs_ptrs[i] = &found_outputs[i];
     }
     const t_start = std.time.nanoTimestamp();
     ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
-        @ptrCast(&found_outputs_ptrs), &n_found_outputs, @ptrCast(&recipient_xpks_ptrs), N_RECIPIENTS,
+        @ptrCast(found_outputs_ptrs), &n_found_outputs, @ptrCast(recipient_xpks_ptrs), N_RECIPIENTS,
         &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
     std.debug.assert(ret == 1);
     const t_end = std.time.nanoTimestamp();
