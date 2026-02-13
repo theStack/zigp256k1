@@ -8,6 +8,7 @@ const s = @cImport({
 const N_INPUTS = 1;
 const K_MAX = s.SECP256K1_SILENTPAYMENTS_RECIPIENT_GROUP_LIMIT;
 const N_RECIPIENTS = 23255;
+const LABEL_CACHE_ENTRIES = 100_000;
 
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
     var pubkey_ser: [33]u8 = undefined;
@@ -104,10 +105,23 @@ pub fn main() !void {
     var label_cache = std.AutoHashMap([33]u8, [32]u8).init(std.heap.page_allocator);
     defer label_cache.deinit();
     try label_cache.put(change_label_data.label_serialized, change_label_data.label_tweak);
+    for (0..LABEL_CACHE_ENTRIES-1) |_i| {
+        const i: u64 = @intCast(_i);
+        var label_tweak: [32]u8 = undefined;
+        @memset(&label_tweak, 0x42);
+        std.mem.writeInt(u64, label_tweak[24..], i, .big);
+        var label: s.secp256k1_pubkey = undefined;
+        const ret = s.secp256k1_ec_pubkey_create(ctx, &label, &label_tweak);
+        std.debug.assert(ret == 1);
+        const label_serialized = pubkeySerialize(ctx, &label);
+        try label_cache.put(label_serialized, label_tweak);
+    }
+    std.debug.assert(label_cache.count() == LABEL_CACHE_ENTRIES);
 
     std.debug.print("  Scan public key: {x}\n", .{&scan_pubkey_bytes});
     std.debug.print(" Spend public key: {x}\n", .{&spend_pubkey_bytes});
     std.debug.print("Labeled spend key: {x}\n", .{&labeled_spend_pubkey_bytes});
+    std.debug.print("Label cache is populated with {d} entries (only one being relevant)\n", .{LABEL_CACHE_ENTRIES});
     std.debug.print("\n", .{});
 
     var input_keymaterial: [N_INPUTS]KeyMaterial = undefined;
@@ -213,5 +227,4 @@ pub fn main() !void {
     } else {
         std.debug.print("Full scan FAILED, found only {d}/{d} outputs.\n", .{n_found_outputs, K_MAX});
     }
-    // TODO: if the outputs are shuffled, all of them should be found too
 }
