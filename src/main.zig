@@ -6,7 +6,9 @@ const s = @cImport({
 });
 
 const N_INPUTS = 1;
-const N_RECIPIENTS = 10;
+const K_MAX = s.SECP256K1_SILENTPAYMENTS_RECIPIENT_GROUP_LIMIT;
+//const N_RECIPIENTS = 23255;
+const N_RECIPIENTS = K_MAX;
 
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
     var pubkey_ser: [33]u8 = undefined;
@@ -116,7 +118,7 @@ pub fn main() !void {
         std.debug.print("Input pubkey[{d}]: {x}\n", .{i, &input_pubkey_bytes});
     }
 
-    // simple send with five legacy inputs, 10 recipients (all having the same addresss)
+    // send with one taproot input, K_max recipients (all having the same labeled addresss)
     var recipient_xpks: [N_RECIPIENTS]s.secp256k1_xonly_pubkey = undefined;
     var recipient_xpks_ptrs: [N_RECIPIENTS]*s.secp256k1_xonly_pubkey = undefined;
     var recipients: [N_RECIPIENTS]s.secp256k1_silentpayments_recipient = undefined;
@@ -124,7 +126,11 @@ pub fn main() !void {
     for (0..N_RECIPIENTS) |i| {
         recipient_xpks_ptrs[i] = &recipient_xpks[i];
         recipients_ptrs[i] = &recipients[i];
-        recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
+        if (i < K_MAX) {
+            recipients[i].scan_pubkey = scan_keymaterial.plain_pubkey;
+        } else {
+            recipients[i].scan_pubkey = labeled_spend_pubkey; // bogus scan pubkey, won't match
+        }
         recipients[i].spend_pubkey = labeled_spend_pubkey;
         recipients[i].index = @intCast(i);
     }
@@ -144,15 +150,18 @@ pub fn main() !void {
         .{N_INPUTS, N_RECIPIENTS});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
-        std.debug.print("-> {x}\n", .{&output_ser});
+        //std.debug.print("-> {x}\n", .{&output_ser});
+        _ = output_ser;
     }
-    var rng = std.Random.DefaultPrng.init(31337);
-    rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs[0..]);
+    // var rng = std.Random.DefaultPrng.init(31337);
+    // rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs[0..]);
+    std.mem.reverse(*s.secp256k1_xonly_pubkey, &recipient_xpks_ptrs);
 
     std.debug.print("--- Shuffled outputs, for the sake of testing: ---\n", .{});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
-        std.debug.print("-> {x}\n", .{&output_ser});
+        //std.debug.print("-> {x}\n", .{&output_ser});
+        _ = output_ser;
     }
 
     // create prevouts summary (the serialized variant would be created by an indexer
@@ -175,16 +184,20 @@ pub fn main() !void {
     for (0..N_RECIPIENTS) |i| {
         found_outputs_ptrs[i] = &found_outputs[i];
     }
+    const t_start = std.time.nanoTimestamp();
     ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
         @ptrCast(&found_outputs_ptrs), &n_found_outputs, @ptrCast(&recipient_xpks_ptrs), N_RECIPIENTS,
         &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
     std.debug.assert(ret == 1);
+    const t_end = std.time.nanoTimestamp();
+    const elapsed_secs = @as(f64, @floatFromInt(t_end - t_start)) / @as(f64, std.time.ns_per_s);
+    std.debug.print("***** Scanning took {d:.3} seconds *****\n", .{elapsed_secs});
     std.debug.print("full scanning found the following outputs:\n", .{});
     for (0..n_found_outputs) |i| {
         const found_output = &found_outputs[i];
         const output_ser = xonlyPubkeySerialize(ctx, &found_output.output);
-        std.debug.print("-> pubkey {x},\n   output tweak {x}\n",
-            .{&output_ser, found_output.tweak});
+        //std.debug.print("-> pubkey {x},\n   output tweak {x}\n", .{&output_ser, found_output.tweak});
+        _ = output_ser;
     }
 
     if (n_found_outputs == N_RECIPIENTS) {
