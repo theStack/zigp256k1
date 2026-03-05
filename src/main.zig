@@ -128,7 +128,8 @@ pub fn main() !void {
     for (0..N_INPUTS) |i| {
         input_keymaterial[i] = deterministicKeypair(ctx, 0x1337 * (i+1));
         const input_pubkey_bytes = xonlyPubkeySerialize(ctx, &input_keymaterial[i].xonly_pubkey);
-        std.debug.print("Input pubkey[{d}]: {x}\n", .{i, &input_pubkey_bytes});
+        //std.debug.print("Input pubkey[{d}]: {x}\n", .{i, &input_pubkey_bytes});
+        _ = input_pubkey_bytes;
     }
 
     // send with one taproot input, K_max recipients (all having the same labeled addresss)
@@ -166,18 +167,17 @@ pub fn main() !void {
         @ptrCast(recipient_xpks_ptrs), @ptrCast(recipients_ptrs), N_RECIPIENTS,
         &outpoint_smallest, &seckey_ptrs, N_INPUTS, null, 0);
     std.debug.assert(ret == 1);
-    std.debug.print("Sending ({d} inputs, {d} recipients), created output x-only pubkeys:\n",
+    std.debug.print("- Sending ({d} inputs, {d} recipients)...\n",
         .{N_INPUTS, N_RECIPIENTS});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
         //std.debug.print("-> {x}\n", .{&output_ser});
         _ = output_ser;
     }
-    // var rng = std.Random.DefaultPrng.init(31337);
-    // rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
     std.mem.reverse(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
 
-    std.debug.print("--- Outputs in worst-case order, for the sake of testing: ---\n", .{});
+    std.debug.print("- Scanning (scan pubkey group with {d} recipients):\n", .{K_MAX});
+    std.debug.print("----- Outputs in worst-case order -----\n", .{});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
         //std.debug.print("-> {x}\n", .{&output_ser});
@@ -206,15 +206,15 @@ pub fn main() !void {
     for (0..N_RECIPIENTS) |i| {
         found_outputs_ptrs[i] = &found_outputs[i];
     }
-    const t_start = std.time.nanoTimestamp();
+    var t_start = std.time.nanoTimestamp();
     ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
         @ptrCast(found_outputs_ptrs), &n_found_outputs, @ptrCast(recipient_xpks_ptrs), N_RECIPIENTS,
         &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
     std.debug.assert(ret == 1);
-    const t_end = std.time.nanoTimestamp();
-    const elapsed_secs = @as(f64, @floatFromInt(t_end - t_start)) / @as(f64, std.time.ns_per_s);
-    std.debug.print("***** Scanning took {d:.3} seconds *****\n", .{elapsed_secs});
-    std.debug.print("full scanning found the following outputs:\n", .{});
+    var t_end = std.time.nanoTimestamp();
+    var elapsed_secs = @as(f64, @floatFromInt(t_end - t_start)) / @as(f64, std.time.ns_per_s);
+    std.debug.print("    >>> Scanning took {d:.3} seconds, found {d} outputs\n", .{elapsed_secs, n_found_outputs});
+    //std.debug.print("full scanning found the following outputs:\n", .{});
     for (0..n_found_outputs) |i| {
         const found_output = &found_outputs[i];
         const output_ser = xonlyPubkeySerialize(ctx, &found_output.output);
@@ -222,9 +222,15 @@ pub fn main() !void {
         _ = output_ser;
     }
 
-    if (n_found_outputs == K_MAX) {
-        std.debug.print("Full scan SUCCEEDED, found all {d} outputs.\n", .{K_MAX});
-    } else {
-        std.debug.print("Full scan FAILED, found only {d}/{d} outputs.\n", .{n_found_outputs, K_MAX});
-    }
+    std.debug.print("----- Outputs in randomized (shuffled) order -----\n", .{});
+    var rng = std.Random.DefaultPrng.init(31337);
+    rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
+    t_start = std.time.nanoTimestamp();
+    ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
+        @ptrCast(found_outputs_ptrs), &n_found_outputs, @ptrCast(recipient_xpks_ptrs), N_RECIPIENTS,
+        &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
+    std.debug.assert(ret == 1);
+    t_end = std.time.nanoTimestamp();
+    elapsed_secs = @as(f64, @floatFromInt(t_end - t_start)) / @as(f64, std.time.ns_per_s);
+    std.debug.print("    >>> Scanning took {d:.3} seconds, found {d} outputs\n", .{elapsed_secs, n_found_outputs});
 }
