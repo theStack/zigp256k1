@@ -7,7 +7,7 @@ const s = @cImport({
 
 const N_INPUTS = 1;
 const K_MAX = s.SECP256K1_SILENTPAYMENTS_RECIPIENT_GROUP_LIMIT;
-const N_RECIPIENTS = 23255;
+const N_RECIPIENTS = 23250;
 const LABEL_CACHE_ENTRIES = 100_000;
 
 fn pubkeySerialize(ctx: ?*const s.secp256k1_context, pubkey: *const s.secp256k1_pubkey) [33]u8 {
@@ -177,7 +177,7 @@ pub fn main() !void {
     // rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
     std.mem.reverse(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
 
-    std.debug.print("--- Shuffled outputs, for the sake of testing: ---\n", .{});
+    std.debug.print("--- Outputs in worst-case order, for the sake of testing: ---\n", .{});
     for (recipient_xpks_ptrs) |generated_output| {
         const output_ser = xonlyPubkeySerialize(ctx, generated_output);
         //std.debug.print("-> {x}\n", .{&output_ser});
