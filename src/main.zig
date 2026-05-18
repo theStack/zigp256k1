@@ -89,7 +89,7 @@ fn labelLookupFn(label33: [*c]const u8, label_context: ?*const anyopaque) callco
     return null;
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     const ctx = s.secp256k1_context_create(s.SECP256K1_CONTEXT_NONE);
     defer s.secp256k1_context_destroy(ctx);
 
@@ -206,13 +206,13 @@ pub fn main() !void {
     for (0..N_RECIPIENTS) |i| {
         found_outputs_ptrs[i] = &found_outputs[i];
     }
-    var t_start = std.time.nanoTimestamp();
+    var t_start = std.Io.Clock.now(.real, init.io).toMilliseconds();
     ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
         @ptrCast(found_outputs_ptrs), &n_found_outputs, @ptrCast(recipient_xpks_ptrs), N_RECIPIENTS,
         &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
     std.debug.assert(ret == 1);
-    var t_end = std.time.nanoTimestamp();
-    var elapsed_secs = @as(f64, @floatFromInt(t_end - t_start)) / @as(f64, std.time.ns_per_s);
+    var t_end = std.Io.Clock.now(.real, init.io).toMilliseconds();
+    var elapsed_secs = @as(f64, @floatFromInt(t_end - t_start))/1000.0;
     std.debug.print("    >>> Scanning took {d:.3} seconds, found {d} outputs\n", .{elapsed_secs, n_found_outputs});
     //std.debug.print("full scanning found the following outputs:\n", .{});
     for (0..n_found_outputs) |i| {
@@ -225,12 +225,12 @@ pub fn main() !void {
     std.debug.print("----- Outputs in randomized (shuffled) order -----\n", .{});
     var rng = std.Random.DefaultPrng.init(31337);
     rng.random().shuffle(*s.secp256k1_xonly_pubkey, recipient_xpks_ptrs);
-    t_start = std.time.nanoTimestamp();
+    t_start = std.Io.Clock.now(.real, init.io).toMilliseconds();
     ret = s.secp256k1_silentpayments_recipient_scan_outputs(ctx,
         @ptrCast(found_outputs_ptrs), &n_found_outputs, @ptrCast(recipient_xpks_ptrs), N_RECIPIENTS,
         &scan_keymaterial.seckey[0], &prevouts_summary, &spend_keymaterial.plain_pubkey, labelLookupFn, &label_cache);
     std.debug.assert(ret == 1);
-    t_end = std.time.nanoTimestamp();
-    elapsed_secs = @as(f64, @floatFromInt(t_end - t_start)) / @as(f64, std.time.ns_per_s);
+    t_end = std.Io.Clock.now(.real, init.io).toMilliseconds();
+    elapsed_secs = @as(f64, @floatFromInt(t_end - t_start))/1000.0;
     std.debug.print("    >>> Scanning took {d:.3} seconds, found {d} outputs\n", .{elapsed_secs, n_found_outputs});
 }

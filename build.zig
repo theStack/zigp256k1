@@ -39,9 +39,9 @@ pub fn build(b: *std.Build) !void {
         }),
     });
     exe.step.dependOn(&secp256k1_cmake_build.step);
-    exe.linkLibC();
-    exe.addIncludePath(secp256k1_include_dir);
-    exe.addObjectFile(secp256k1_staticlib_file);
+    exe.root_module.linkSystemLibrary("c", .{});
+    exe.root_module.addIncludePath(secp256k1_include_dir);
+    exe.root_module.addObjectFile(secp256k1_staticlib_file);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
